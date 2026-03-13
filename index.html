@@ -74,21 +74,34 @@ src.connect(bp).connect(g).connect(ctx.destination); src.start(t); src.stop(t + 
 playReveal() {
 if (!this.ready) return;
 const ctx = this.ctx, t = ctx.currentTime;
-const osc = ctx.createOscillator(); osc.type = "sine";
-osc.frequency.setValueAtTime(200, t); osc.frequency.exponentialRampToValueAtTime(60, t + 0.2);
-const tg = ctx.createGain(); tg.gain.setValueAtTime(0.35, t); tg.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-osc.connect(tg).connect(ctx.destination); osc.start(t); osc.stop(t + 0.3);
-const o2 = ctx.createOscillator(); o2.type = "triangle";
-o2.frequency.setValueAtTime(800, t + 0.05); o2.frequency.exponentialRampToValueAtTime(1400, t + 0.35);
-const sg = ctx.createGain(); sg.gain.setValueAtTime(0, t); sg.gain.linearRampToValueAtTime(0.12, t + 0.08); sg.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-o2.connect(sg).connect(ctx.destination); o2.start(t + 0.05); o2.stop(t + 0.5);
-const bLen = Math.floor(ctx.sampleRate * 0.25);
-const bBuf = ctx.createBuffer(1, bLen, ctx.sampleRate);
-const bd = bBuf.getChannelData(0); for (let i = 0; i < bLen; i++) bd[i] = (Math.random() * 2 - 1) * 0.3;
-const bs = ctx.createBufferSource(); bs.buffer = bBuf;
-const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 4000;
-const bg = ctx.createGain(); bg.gain.setValueAtTime(0.08, t); bg.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-bs.connect(hp).connect(bg).connect(ctx.destination); bs.start(t); bs.stop(t + 0.25);
+// Big rip burst — dense noise shaped like a fast paper tear
+const ripLen = Math.floor(ctx.sampleRate * 0.16);
+const ripBuf = ctx.createBuffer(1, ripLen, ctx.sampleRate);
+const rd = ripBuf.getChannelData(0);
+for (let i = 0; i < ripLen; i++) rd[i] = (Math.random() * 2 - 1);
+const ripSrc = ctx.createBufferSource(); ripSrc.buffer = ripBuf;
+const ripBp = ctx.createBiquadFilter(); ripBp.type = "bandpass"; ripBp.frequency.value = 2800; ripBp.Q.value = 0.45;
+const ripHi = ctx.createBiquadFilter(); ripHi.type = "highshelf"; ripHi.frequency.value = 3500; ripHi.gain.value = 9;
+const ripG = ctx.createGain(); ripG.gain.setValueAtTime(0.55, t); ripG.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+ripSrc.connect(ripBp).connect(ripHi).connect(ripG).connect(ctx.destination); ripSrc.start(t); ripSrc.stop(t + 0.16);
+// Secondary crumple/rustle that fades out
+const crLen = Math.floor(ctx.sampleRate * 0.32);
+const crBuf = ctx.createBuffer(1, crLen, ctx.sampleRate);
+const crd = crBuf.getChannelData(0);
+for (let i = 0; i < crLen; i++) crd[i] = Math.random() > 0.38 ? (Math.random() * 2 - 1) * 0.55 : 0;
+const crSrc = ctx.createBufferSource(); crSrc.buffer = crBuf;
+const crBp = ctx.createBiquadFilter(); crBp.type = "bandpass"; crBp.frequency.value = 1900; crBp.Q.value = 0.55;
+const crG = ctx.createGain(); crG.gain.setValueAtTime(0.28, t + 0.04); crG.gain.exponentialRampToValueAtTime(0.001, t + 0.36);
+crSrc.connect(crBp).connect(crG).connect(ctx.destination); crSrc.start(t + 0.04); crSrc.stop(t + 0.36);
+// High-frequency papery shred tail
+const shLen = Math.floor(ctx.sampleRate * 0.22);
+const shBuf = ctx.createBuffer(1, shLen, ctx.sampleRate);
+const shd = shBuf.getChannelData(0);
+for (let i = 0; i < shLen; i++) shd[i] = (Math.random() * 2 - 1) * 0.4;
+const shSrc = ctx.createBufferSource(); shSrc.buffer = shBuf;
+const shHp = ctx.createBiquadFilter(); shHp.type = "highpass"; shHp.frequency.value = 5000;
+const shG = ctx.createGain(); shG.gain.setValueAtTime(0.12, t + 0.02); shG.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+shSrc.connect(shHp).connect(shG).connect(ctx.destination); shSrc.start(t + 0.02); shSrc.stop(t + 0.24);
 }
 }
 const soundEngine = new SoundEngine();
@@ -284,13 +297,13 @@ const cy = e.touches ? e.touches[0].clientY : e.clientY;
 return { x: cx - rect.left, y: cy - rect.top };
 }, []);
 const onDown = useCallback((e) => {
-if (locked) return;
+if (locked || revealed) return;
 e.preventDefault();
 soundEngine.init();
 setDragging(true); lockScroll();
 const p = getPos(e);
 if (p) { lastPos.current = p; tearAt(p.x, p.y, 0, 0); }
-}, [getPos, tearAt, locked]);
+}, [getPos, tearAt, locked, revealed]);
 const onMove = useCallback((e) => {
 if (!dragging) return;
 e.preventDefault();
@@ -320,7 +333,7 @@ return (
 style={{
 position: "relative", width, height, borderRadius: 14, overflow: "hidden",
 cursor: locked ? "not-allowed" : revealed ? "default" : dragging ? "grabbing" : "grab",
-touchAction: "none",
+touchAction: revealed ? "auto" : "none",
 boxShadow: revealed
 ? `0 10px 60px ${gift.wrap[0]}55, 0 0 100px ${gift.ribbon}22, inset 0 0 30px rgba(255,255,255,0.03)`
 : `0 6px 25px ${gift.wrap[1]}77, 0 2px 8px rgba(0,0,0,0.35)`,
@@ -714,3 +727,4 @@ root.render(<GiftPage />);
 </script>
 </body>
 </html>
+
